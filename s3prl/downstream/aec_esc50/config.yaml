@@ -1,0 +1,84 @@
+
+# this voxceleb1 is doing speaker classification task!
+runner:
+  total_steps: 30000
+  gradient_clipping: 1
+  gradient_accumulate_steps: 2
+
+  log_step: 200
+  eval_step: 500
+  save_step: 500
+  max_keep: 1
+  eval_dataloaders: 
+    - dev
+    - test
+  
+optimizer:
+  name: TorchOptim
+  torch_optim_name: Adam
+  lr: 1.0e-3
+
+# # comment the whole scheduler config block to disable learning rate scheduling
+# scheduler:
+#   name: linear_schedule_with_warmup
+#   num_warmup_steps: 5000
+
+specaug:
+  adaptive: true
+  adaptive_number_ratio: 0.04
+  adaptive_size_ratio: 0.04
+  max_n_time_masks: 20
+  apply_time_warp: true
+  apply_time_mask: true
+  apply_freq_mask: true
+  time_warp_window: 5
+  time_mask_width_range: [0, 40]
+  freq_mask_width_range: [0, 50]
+  num_freq_mask: 4
+  num_time_mask: 2
+
+# add_noise:
+#   noise_mean: 0
+#   noise_std: 0.005
+
+mixup:
+  mixup_alpha: 0.7
+  prob: 0.9
+  mode: 'elem'
+  label_smoothing: 0.1
+
+downstream_expert: 
+  datarc:
+    file_path: /path/to/esc50-v2.0.0-full
+    num_workers: 8
+    test_fold: fold1 ## 5 fold cv.fold00.json  fold01.json   fold02.json  fold03.json fold04.json
+    train_batch_size: 32
+    eval_batch_size: 32
+
+    pre_extract:
+      accelerator: gpu
+      audio_dir: /groups/ycevan/tasks/esc50-v2.0.0-full/48000
+      keep_folder_structure: true
+      overwrite: true
+
+      audio_loader:
+        is_mono: true
+        is_normalize: false  # min-max normalization
+        crop_to_length_in_sec: null
+        crop_to_length_in_sample_points: null
+        crop_randomly: false
+        sliding_window_size_in_sec: null
+        sliding_window_overlap_in_percent: 0.0
+
+      feature_extractor:
+        reduction: mean # [mean, max, min, none]
+
+    dataset: ESC-50
+    input_type: feature # [audio, feature]
+
+  modelrc:
+    projector_dim: 512
+    select: UtteranceLevel
+    UtteranceLevel:
+      pooling: MeanPooling
+    dropout_p: 0.2

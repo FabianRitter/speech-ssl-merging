@@ -1,0 +1,19 @@
+datarc:
+    train: ['combined-shuffled']
+    dev-clean: ['dev-clean']
+    dev-other: ['dev-other']
+    test-clean: ['test-clean']
+    test-other: ['test-other']
+    num_workers: 12
+    train_batch_size: 16
+    batch_size: 16
+    eval_batch_size: 1
+    libri_root: '/path/to/LibriSpeech'
+    bucket_file: './data/len_for_bucket'
+    dict_path: "./downstream/asr/char.dict"
+
+
+    # data/len_for_bucket/train-clean-100-1000-samples
+    # combined-librispeech-100-5000samples-and-5000-samples-music4all
+    # train-clean-100-5000-samples
+    # train-clean-100-1000-samples

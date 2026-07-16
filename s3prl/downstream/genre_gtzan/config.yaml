@@ -1,0 +1,56 @@
+# this voxceleb1 is doing speaker classification task!
+runner:
+  total_steps: 10000
+  gradient_clipping: 1
+  gradient_accumulate_steps: 1
+
+  log_step: 200
+  eval_step: 200
+  save_step: 200
+  max_keep: 1
+  eval_dataloaders: 
+    - valid
+    - test
+  
+optimizer:
+  name: TorchOptim
+  torch_optim_name: Adam
+  lr: 6.0e-3
+
+# # comment the whole scheduler config block to disable learning rate scheduling
+scheduler:
+  name: linear_schedule_with_warmup
+  num_warmup_steps: 2000
+
+downstream_expert: 
+  datarc:
+    file_path: /path/to/GTZAN
+    meta_data: /path/to/GTZAN
+    num_workers: 24
+    train_batch_size: 64
+    eval_batch_size: 12
+    sample_rate: 24000
+
+    # pre_extract:
+    #   accelerator: gpu
+    #   audio_dir: ../../../../groups/ycevan/datasets/VocalSet
+    #   keep_folder_structure: true
+    #   overwrite: false
+
+    #   audio_loader:
+    #     is_mono: true
+    #     is_normalize: false  # min-max normalization
+    #     crop_to_length_in_sec: null
+    #     crop_to_length_in_sample_points: null
+    #     crop_randomly: false
+    #     sliding_window_size_in_sec: null
+    #     sliding_window_overlap_in_percent: 0.0
+
+    #   feature_extractor:
+    #     reduction: mean # [mean, max, min, none]
+
+  modelrc:
+    projector_dim: 256
+    select: UtteranceLevel
+    UtteranceLevel:
+      pooling: MeanPooling

@@ -1,0 +1,33 @@
+
+# this voxceleb1 is doing speaker classification task!
+runner:
+  total_steps: 75000
+  gradient_clipping: 1
+  gradient_accumulate_steps: 1
+
+  log_step: 300
+  eval_step: 300
+  save_step: 300
+  max_keep: 1
+  eval_dataloaders:
+    - dev
+    - test
+
+optimizer:
+  name: TorchOptim
+  torch_optim_name: Adam
+  lr: 1.0e-3
+
+downstream_expert:
+  datarc:
+    file_path: /workspace/s3prl/s3prl/data/vocalset_processed
+    meta_data: ./downstream/vocalset_technique_id/data
+    num_workers: 4
+    train_batch_size: 64
+    eval_batch_size: 1
+
+  modelrc:
+    projector_dim: 512
+    select: UtteranceLevel
+    UtteranceLevel:
+      pooling: MeanPooling

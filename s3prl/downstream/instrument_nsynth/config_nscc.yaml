@@ -1,0 +1,32 @@
+# Instrument Classification (NSynth) - NSCC cluster config
+# Uses container paths via enroot mounts. Safe from git pull overwrites.
+runner:
+  total_steps: 200000
+  gradient_clipping: 1
+  gradient_accumulate_steps: 1
+
+  log_step: 100
+  eval_step: 2000
+  save_step: 1000
+  max_keep: 1
+  eval_dataloaders:
+    - dev
+    - test
+
+optimizer:
+  name: TorchOptim
+  torch_optim_name: Adam
+  lr: 1.0e-3
+
+downstream_expert:
+  datarc:
+    meta_data: /workspace/audio_data/NSynth
+    num_workers: 8
+    train_batch_size: 64
+    eval_batch_size: 1
+
+  modelrc:
+    projector_dim: 512
+    select: UtteranceLevel
+    UtteranceLevel:
+      pooling: MeanPooling

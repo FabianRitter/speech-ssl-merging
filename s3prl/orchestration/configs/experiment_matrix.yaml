@@ -1,0 +1,217 @@
+# ============================================================
+# EXPERIMENT MATRIX — Chapter 5 Permutation-Based Merging
+# ============================================================
+# Single source of truth. All 4 agents read this file.
+# ============================================================
+
+# --- Google Sheet Configuration ---
+# The spreadsheet is "SLLM_encoder_eval" (the Google Sheets file name).
+# Inside it, results go to the "Correlation-Merging-Results" worksheet.
+# Logfiles go to "Correlation-Merging-Results-Logfiles".
+#
+# IMPORTANT: When submitting downstream jobs, you MUST pass the worksheet
+# names explicitly so results land in the correct worksheet:
+#
+#   NTU (run_downstream_local.sh):
+#     --worksheet_name "Correlation-Merging-Results"
+#     --worksheet_logfile_name "Correlation-Merging-Results-Logfiles"
+#
+#   NSCC (run_downstream_enroot_2026.sh):
+#     --worksheet_name "Correlation-Merging-Results"
+#     --worksheet_logfile_name "Correlation-Merging-Results-Logfiles"
+#
+# If omitted, the default worksheet is "dowstream-performance-distilled-models"
+# which is the WRONG sheet for these experiments.
+google_sheet:
+  spreadsheet_name: "SLLM_encoder_eval"
+  worksheet_name: "Correlation-Merging-Results"
+  worksheet_logfile_name: "Correlation-Merging-Results-Logfiles"
+  starting_row: 100
+  logfile_row_offset: 200  # logfile_row = current_row + 200
+
+# --- Model Pairs ---
+model_pairs:
+  - pair_id: "2L_LKD"
+    speech_model: "distilhubert-ls960-own"
+    music_model: "distill_only_mert-init-weight-from-hubert_base-models-simple-avg-pool-for-teacher-train-libri-960"
+    layers: 2
+    loss: "L_KD"
+    init: "HuBERT"
+    architecture: "standard"
+    encoder_embed_dim: 768
+    encoder_attention_heads: 12
+
+  - pair_id: "2L_wide_LCL"
+    speech_model: "hubert_l1_wide"
+    music_model: "mert_l1_wide"
+    layers: 2
+    loss: "L_CL"
+    init: "theta_base_wide"
+    architecture: "wide"
+    encoder_embed_dim: 1536
+    encoder_attention_heads: 6
+
+  - pair_id: "3L_LKD"
+    speech_model: "distilhubert-ls960-own-3layers"
+    music_model: "distill_only_mert-init-weight-from-hubert_base-models-simple-avg-pool-for-teacher-train-libri-960-3layers-version"
+    layers: 3
+    loss: "L_KD"
+    init: "HuBERT"
+    architecture: "standard"
+    encoder_embed_dim: 768
+    encoder_attention_heads: 12
+
+  - pair_id: "3L_LCL"
+    speech_model: "barlow_no_distort_old_3layers"
+    music_model: "mert_barlow_2layers_old_style-3layers"
+    layers: 3
+    loss: "L_CL"
+    init: "HuBERT"
+    architecture: "standard"
+    encoder_embed_dim: 768
+    encoder_attention_heads: 12
+
+# --- Permutation Methods ---
+permutation_methods:
+  - method_id: "G1"
+    name: "Local (baseline)"
+    description: "Single-pass greedy layer-by-layer, CNN+ffn+attn"
+    passes: 1
+    implementation: "existing"
+
+  - method_id: "G2"
+    name: "Iterative-2"
+    description: "Two full passes of local optimisation"
+    passes: 2
+    implementation: "new — wrapper loop around existing"
+    status: "DROPPED — delta=0.0, G2 identical to G1. No downstream eval (2026-03-23)"
+
+  - method_id: "G3"
+    name: "Iterative-5"
+    description: "Five full passes of local optimisation"
+    passes: 5
+    implementation: "new — wrapper loop around existing"
+    status: "DROPPED — Hungarian converges in 1 pass; G3 = G2 = G1 (2026-03-23)"
+
+  - method_id: "G4"
+    name: "Sinkhorn-CC (pre-collected)"
+    description: "Sinkhorn relaxation on pre-collected features, joint cross-correlation loss over all layers"
+    sinkhorn_iterations: 20
+    optimization_steps: 300
+    learning_rate: 0.01
+    implementation: "new — match_tensors_sinkhorn_cc() in matching_functions.py"
+    design_doc: "orchestration/agents/G4_research_report.md"
+
+  - method_id: "G4.2"
+    name: "Sinkhorn-CC (end-to-end)"
+    description: "End-to-end differentiable Sinkhorn with soft permutations inside model B forward pass — truly global search across all layers"
+    sinkhorn_iterations: 20
+    optimization_steps: 300
+    learning_rate: 0.01
+    implementation: "new — sinkhorn_e2e.py PermutedModelWrapper"
+    design_doc: "orchestration/agents/G4_2_e2e_research_report.md"
+
+  # G5 moved to backlog — G4.2 (global end-to-end) is higher priority
+  # - method_id: "G5"
+  #   name: "Sinkhorn-Recon"
+  #   description: "Sinkhorn relaxation, reconstruction MSE loss on final-layer activations"
+  #   status: "backlog"
+
+# --- Interpolation Weights ---
+interpolation_weights:
+  - { lambda_speech: 0.9, lambda_music: 0.1, label: "0.9_0.1" }
+  - { lambda_speech: 0.8, lambda_music: 0.2, label: "0.8_0.2" }
+  - { lambda_speech: 0.5, lambda_music: 0.5, label: "0.5_0.5" }
+  - { lambda_speech: 0.2, lambda_music: 0.8, label: "0.2_0.8" }
+  - { lambda_speech: 0.1, lambda_music: 0.9, label: "0.1_0.9" }
+
+# --- Cluster Task Assignment ---
+# NOTE: SID (VoxCeleb1) cannot run on NSCC — the dataset directory is empty there.
+# SID is run on NTU instead.
+# NOTE: genreid (genre_gtzan/GTZAN) moved to NSCC as of 2026-03-23.
+# genreid uses high GPU memory during validation, causing infinite OOM retry loops
+# when multiple tasks share GPUs on NTU. NSCC runs it alongside other tasks.
+cluster_tasks:
+  ntu:
+    tasks: [ic, instcls, aec_esc50, sid]
+    results_dir: "result/downstream-thesis-pending-exps"
+    config_type: "config.yaml"
+  nscc:
+    tasks: [asr, ks, er, singid, vocid, pitchid, genreid]
+    results_dir: "result/downstream"
+    config_type: "config_nscc.yaml"
+
+# --- Row Assignment ---
+# Row = base_row + (pair_offset * 25) + (method_offset * 5) + interpolation_index
+#
+# pair_offsets:  2L_LKD=0, 2L_wide_LCL=1, 3L_LKD=2, 3L_LCL=3
+# method_offsets within each pair block: G1=0, G2=1, G3=2, G4=3, G5=4
+# interpolation_index: 0.9_0.1=0, 0.8_0.2=1, 0.5_0.5=2, 0.2_0.8=3, 0.1_0.9=4
+#
+# Examples:
+#   2L_LKD, G1, 0.9:0.1  → 100 + (0*25) + (0*5) + 0 = row 100
+#   2L_LKD, G1, 0.1:0.9  → 100 + (0*25) + (0*5) + 4 = row 104
+#   2L_LKD, G2, 0.9:0.1  → 100 + (0*25) + (1*5) + 0 = row 105
+#   2L_wide_LCL, G1, 0.9:0.1  → 100 + (1*25) + (0*5) + 0 = row 125
+#   3L_LKD, G1, 0.9:0.1  → 100 + (2*25) + (0*5) + 0 = row 150
+#   3L_LCL, G1, 0.9:0.1  → 100 + (3*25) + (0*5) + 0 = row 175
+#
+# Total row range: 100–199 (4 pairs × 5 methods × 5 interpolations = 100 rows)
+# Logfile rows: 300–399
+
+row_assignment:
+  base_row: 100
+  pair_offsets:
+    "2L_LKD": 0
+    "2L_wide_LCL": 1
+    "3L_LKD": 2
+    "3L_LCL": 3
+  method_offsets:
+    "G1": 0
+    "G2": 1
+    "G3": 2
+    "G4": 3
+    "G5": 4
+  interpolation_indices:
+    "0.9_0.1": 0
+    "0.8_0.2": 1
+    "0.5_0.5": 2
+    "0.2_0.8": 3
+    "0.1_0.9": 4
+
+# --- Phase Execution Plan ---
+phases:
+  phase1:
+    description: "G1 baseline on all 4 model pairs"
+    methods: [G1]
+    model_pairs: [2L_LKD, 2L_wide_LCL, 3L_LKD, 3L_LCL]
+    interpolations: all  # 5 each = 20 experiments
+    rows: "100-104, 125-129, 150-154, 175-179"
+
+  phase2:
+    description: "Iterative refinement G2+G3 on selected pair — DROPPED"
+    methods: [G2, G3]
+    status: "DROPPED 2026-03-23 — G2 delta=0.0 (G1 fully converges in 1 pass). No downstream eval for rows 155-157."
+    model_pairs: "3L_LKD (was selected pair)"
+    rows: "155-157 (rows exist in sheet but no eval will be written)"
+
+  phase3:
+    description: "Sinkhorn G4 on selected pair (3L_LKD)"
+    methods: [G4, G4.2]
+    model_pairs: [3L_LKD]
+    interpolations: [0.9_0.1, 0.8_0.2, 0.5_0.5]
+    rows: "TBD (G4 row offset=3: 3L_LKD G4 → rows 163-167)"
+
+  phase4:
+    description: "Best method on remaining pairs if warranted"
+    methods: "TBD"
+    model_pairs: "TBD"
+    interpolations: all
+    rows: "TBD"
+
+# --- Calibration Data, needed in NTU. ---
+calibration:
+  speech_data: "LibriSpeech-100"
+  music_data: "Music4All"
+  n_samples_per_domain: 5000
+  location: ./data/len_for_bucket/combined-shuffled.csv
